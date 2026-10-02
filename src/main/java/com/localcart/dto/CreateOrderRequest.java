@@ -1,0 +1,59 @@
+package com.localcart.dto;
+
+import com.localcart.entity.DeliveryMode;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.NotNull;
+
+import java.util.List;
+
+public class CreateOrderRequest {
+
+    @NotNull
+    private Long shopId;
+
+    @NotNull
+    private Long customerId;
+
+    @NotNull
+    private DeliveryMode deliveryMode;
+
+    @NotEmpty
+    @Valid
+    private List<OrderItemRequest> items;
+
+    public CreateOrderRequest() {
+    }
+
+    public Long getShopId() {
+        return shopId;
+    }
+
+    public void setShopId(Long shopId) {
+        this.shopId = shopId;
+    }
+
+    public Long getCustomerId() {
+        return customerId;
+    }
+
+    public void setCustomerId(Long customerId) {
+        this.customerId = customerId;
+    }
+
+    public DeliveryMode getDeliveryMode() {
+        return deliveryMode;
+    }
+
+    public void setDeliveryMode(DeliveryMode deliveryMode) {
+        this.deliveryMode = deliveryMode;
+    }
+
+    public List<OrderItemRequest> getItems() {
+        return items;
+    }
+
+    public void setItems(List<OrderItemRequest> items) {
+        this.items = items;
+    }
+}

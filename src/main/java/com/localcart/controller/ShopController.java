@@ -2,7 +2,6 @@ package com.localcart.controller;
 
 import com.localcart.entity.Shop;
 import com.localcart.service.ShopService;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -20,19 +19,23 @@ public class ShopController {
     }
 
     @PostMapping
-    public ResponseEntity<Shop> createShop(@RequestBody Shop shop) {
+    public ResponseEntity<Shop> createShop(
+            @RequestBody Shop shop,
+            @RequestParam Long ownerId) {
 
-        Shop createdShop = shopService.createShop(shop);
+        Optional<Shop> createdShop =
+                shopService.createShop(shop, ownerId);
 
-        return new ResponseEntity<>(createdShop, HttpStatus.CREATED);
+        if (createdShop.isPresent()) {
+            return ResponseEntity.ok(createdShop.get());
+        }
+
+        return ResponseEntity.badRequest().build();
     }
 
     @GetMapping
     public ResponseEntity<List<Shop>> getAllShops() {
-
-        List<Shop> shops = shopService.getAllShops();
-
-        return ResponseEntity.ok(shops);
+        return ResponseEntity.ok(shopService.getAllShops());
     }
 
     @GetMapping("/{id}")
@@ -47,25 +50,41 @@ public class ShopController {
         return ResponseEntity.notFound().build();
     }
 
+    @GetMapping("/owner/{ownerId}")
+    public ResponseEntity<List<Shop>> getShopsByOwner(
+            @PathVariable Long ownerId) {
+
+        Optional<List<Shop>> shops =
+                shopService.getShopsByOwner(ownerId);
+
+        if (shops.isPresent()) {
+            return ResponseEntity.ok(shops.get());
+        }
+
+        return ResponseEntity.notFound().build();
+    }
+
     @PutMapping("/{id}")
     public ResponseEntity<Shop> updateShop(
             @PathVariable Long id,
-            @RequestBody Shop shopRequest) {
+            @RequestBody Shop updatedShop) {
 
-        Optional<Shop> updatedShop =
-                shopService.updateShop(id, shopRequest);
+        Optional<Shop> shop =
+                shopService.updateShop(id, updatedShop);
 
-        if (updatedShop.isPresent()) {
-            return ResponseEntity.ok(updatedShop.get());
+        if (shop.isPresent()) {
+            return ResponseEntity.ok(shop.get());
         }
 
         return ResponseEntity.notFound().build();
     }
 
     @PutMapping("/{id}/deactivate")
-    public ResponseEntity<Shop> deactivateShop(@PathVariable Long id) {
+    public ResponseEntity<Shop> deactivateShop(
+            @PathVariable Long id) {
 
-        Optional<Shop> shop = shopService.deactivateShop(id);
+        Optional<Shop> shop =
+                shopService.deactivateShop(id);
 
         if (shop.isPresent()) {
             return ResponseEntity.ok(shop.get());

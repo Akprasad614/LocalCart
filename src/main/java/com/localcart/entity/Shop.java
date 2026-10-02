@@ -20,6 +20,10 @@ public class Shop {
 
     private boolean active;
 
+    @ManyToOne
+    @JoinColumn(name = "owner_id")
+    private User owner;
+
     public Shop() {
     }
 
@@ -65,5 +69,13 @@ public class Shop {
 
     public void setActive(boolean active) {
         this.active = active;
+    }
+
+    public User getOwner() {
+        return owner;
+    }
+
+    public void setOwner(User owner) {
+        this.owner = owner;
     }
 }
