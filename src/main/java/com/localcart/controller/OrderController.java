@@ -1,9 +1,12 @@
 package com.localcart.controller;
 
+import com.localcart.dto.CreateOrderRequest;
 import com.localcart.entity.Order;
 import com.localcart.entity.OrderStatus;
 import com.localcart.service.OrderService;
+import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -20,8 +23,9 @@ public class OrderController {
     }
 
     @PostMapping
+    @PreAuthorize("hasRole('CUSTOMER')")
     public ResponseEntity<Order> createOrder(
-            @RequestBody com.localcart.dto.CreateOrderRequest request) {
+            @Valid @RequestBody CreateOrderRequest request) {
 
         Optional<Order> order =
                 orderService.createOrder(request);
@@ -35,7 +39,6 @@ public class OrderController {
 
     @GetMapping
     public ResponseEntity<List<Order>> getAllOrders() {
-
         return ResponseEntity.ok(
                 orderService.getAllOrders()
         );

@@ -1,13 +1,18 @@
 package com.localcart.service;
 
+import com.localcart.dto.CreateShopRequest;
+import com.localcart.dto.ShopResponse;
+import com.localcart.dto.UpdateShopRequest;
+import com.localcart.entity.Role;
 import com.localcart.entity.Shop;
 import com.localcart.entity.User;
+import com.localcart.exception.BadRequestException;
+import com.localcart.exception.ResourceNotFoundException;
 import com.localcart.repository.ShopRepository;
 import com.localcart.repository.UserRepository;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
-import java.util.Optional;
 
 @Service
 public class ShopService {
@@ -15,76 +20,164 @@ public class ShopService {
     private final ShopRepository shopRepository;
     private final UserRepository userRepository;
 
-    public ShopService(ShopRepository shopRepository,
-                       UserRepository userRepository) {
+    public ShopService(
+            ShopRepository shopRepository,
+            UserRepository userRepository) {
+
         this.shopRepository = shopRepository;
         this.userRepository = userRepository;
     }
 
-    public Optional<Shop> createShop(Shop shop, Long ownerId) {
+    public ShopResponse createShop(
+            String email,
+            CreateShopRequest request) {
 
-        Optional<User> owner = userRepository.findById(ownerId);
+        User owner = getShopkeeper(email);
 
-        if (owner.isEmpty()) {
-            return Optional.empty();
-        }
+        Shop shop = new Shop();
 
-        if (!owner.get().isActive()) {
-            return Optional.empty();
-        }
-
-        shop.setOwner(owner.get());
-        shop.setOwnerName(owner.get().getName());
+        shop.setName(request.getName());
+        shop.setOwnerName(owner.getName());
+        shop.setPhone(request.getPhone());
+        shop.setAddress(request.getAddress());
         shop.setActive(true);
+        shop.setOwner(owner);
 
-        return Optional.of(shopRepository.save(shop));
+        return toResponse(
+                shopRepository.save(shop)
+        );
     }
 
-    public List<Shop> getAllShops() {
-        return shopRepository.findAll();
+    public List<ShopResponse> getAllShops() {
+
+        return shopRepository.findAll()
+                .stream()
+                .map(this::toResponse)
+                .toList();
     }
 
-    public Optional<Shop> getShopById(Long id) {
-        return shopRepository.findById(id);
+    public ShopResponse getShopById(Long id) {
+
+        Shop shop = shopRepository.findById(id)
+                .orElseThrow(() ->
+                        new ResourceNotFoundException(
+                                "Shop not found"
+                        ));
+
+        return toResponse(shop);
     }
 
-    public Optional<List<Shop>> getShopsByOwner(Long ownerId) {
+    public List<ShopResponse> getShopsByOwner(Long ownerId) {
 
         if (!userRepository.existsById(ownerId)) {
-            return Optional.empty();
+            throw new ResourceNotFoundException(
+                    "Owner not found"
+            );
         }
 
-        return Optional.of(shopRepository.findByOwnerId(ownerId));
+        return shopRepository.findByOwnerId(ownerId)
+                .stream()
+                .map(this::toResponse)
+                .toList();
     }
 
-    public Optional<Shop> updateShop(Long id, Shop updatedShop) {
+    public ShopResponse updateShop(
+            Long shopId,
+            String email,
+            UpdateShopRequest request) {
 
-        Optional<Shop> existingShop = shopRepository.findById(id);
+        User owner = getShopkeeper(email);
 
-        if (existingShop.isEmpty()) {
-            return Optional.empty();
-        }
+        Shop shop = getShop(shopId);
 
-        Shop shop = existingShop.get();
+        checkOwnership(shop, owner);
 
-        shop.setName(updatedShop.getName());
-        shop.setPhone(updatedShop.getPhone());
-        shop.setAddress(updatedShop.getAddress());
+        shop.setName(request.getName());
+        shop.setPhone(request.getPhone());
+        shop.setAddress(request.getAddress());
 
-        return Optional.of(shopRepository.save(shop));
+        return toResponse(
+                shopRepository.save(shop)
+        );
     }
 
-    public Optional<Shop> deactivateShop(Long id) {
+    public ShopResponse deactivateShop(
+            Long shopId,
+            String email) {
 
-        Optional<Shop> existingShop = shopRepository.findById(id);
+        User owner = getShopkeeper(email);
 
-        if (existingShop.isEmpty()) {
-            return Optional.empty();
-        }
+        Shop shop = getShop(shopId);
 
-        Shop shop = existingShop.get();
+        checkOwnership(shop, owner);
+
         shop.setActive(false);
 
-        return Optional.of(shopRepository.save(shop));
+        return toResponse(
+                shopRepository.save(shop)
+        );
+    }
+
+    private User getShopkeeper(String email) {
+
+        if (email == null) {
+            throw new BadRequestException(
+                    "User is not authenticated"
+            );
+        }
+
+        User owner = userRepository.findByEmail(email)
+                .orElseThrow(() ->
+                        new ResourceNotFoundException(
+                                "User not found"
+                        ));
+
+        if (owner.getRole() != Role.SHOPKEEPER) {
+            throw new BadRequestException(
+                    "Only a shopkeeper can perform this action"
+            );
+        }
+
+        if (!owner.isActive()) {
+            throw new BadRequestException(
+                    "Shopkeeper account is inactive"
+            );
+        }
+
+        return owner;
+    }
+
+    private Shop getShop(Long id) {
+
+        return shopRepository.findById(id)
+                .orElseThrow(() ->
+                        new ResourceNotFoundException(
+                                "Shop not found"
+                        ));
+    }
+
+    private void checkOwnership(
+            Shop shop,
+            User owner) {
+
+        if (shop.getOwner() == null ||
+                !shop.getOwner().getId().equals(owner.getId())) {
+
+            throw new BadRequestException(
+                    "You do not own this shop"
+            );
+        }
+    }
+
+    private ShopResponse toResponse(Shop shop) {
+
+        return new ShopResponse(
+                shop.getId(),
+                shop.getName(),
+                shop.getOwnerName(),
+                shop.getPhone(),
+                shop.getAddress(),
+                shop.isActive()
+        );
     }
 }

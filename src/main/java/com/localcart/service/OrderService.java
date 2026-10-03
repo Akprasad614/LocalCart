@@ -2,17 +2,24 @@ package com.localcart.service;
 
 import com.localcart.dto.CreateOrderRequest;
 import com.localcart.dto.OrderItemRequest;
+import com.localcart.entity.Cart;
+import com.localcart.entity.CartItem;
 import com.localcart.entity.Order;
 import com.localcart.entity.OrderItem;
 import com.localcart.entity.OrderStatus;
+import com.localcart.entity.Role;
 import com.localcart.entity.Shop;
 import com.localcart.entity.ShopInventory;
 import com.localcart.entity.User;
+import com.localcart.exception.BadRequestException;
+import com.localcart.exception.ResourceNotFoundException;
+import com.localcart.repository.CartRepository;
 import com.localcart.repository.OrderItemRepository;
 import com.localcart.repository.OrderRepository;
 import com.localcart.repository.ShopInventoryRepository;
 import com.localcart.repository.ShopRepository;
 import com.localcart.repository.UserRepository;
+import com.localcart.security.SecurityUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -27,23 +34,27 @@ public class OrderService {
     private final ShopRepository shopRepository;
     private final ShopInventoryRepository shopInventoryRepository;
     private final UserRepository userRepository;
+    private final CartRepository cartRepository;
 
     public OrderService(
             OrderRepository orderRepository,
             OrderItemRepository orderItemRepository,
             ShopRepository shopRepository,
             ShopInventoryRepository shopInventoryRepository,
-            UserRepository userRepository) {
+            UserRepository userRepository,
+            CartRepository cartRepository) {
 
         this.orderRepository = orderRepository;
         this.orderItemRepository = orderItemRepository;
         this.shopRepository = shopRepository;
         this.shopInventoryRepository = shopInventoryRepository;
         this.userRepository = userRepository;
+        this.cartRepository = cartRepository;
     }
 
     @Transactional
-    public Optional<Order> createOrder(CreateOrderRequest request) {
+    public Optional<Order> createOrder(
+            CreateOrderRequest request) {
 
         Optional<Shop> shopOptional =
                 shopRepository.findById(request.getShopId());
@@ -52,8 +63,15 @@ public class OrderService {
             return Optional.empty();
         }
 
+        String email =
+                SecurityUtils.getCurrentUserEmail();
+
+        if (email == null) {
+            return Optional.empty();
+        }
+
         Optional<User> customerOptional =
-                userRepository.findById(request.getCustomerId());
+                userRepository.findByEmail(email);
 
         if (customerOptional.isEmpty()) {
             return Optional.empty();
@@ -62,30 +80,105 @@ public class OrderService {
         Shop shop = shopOptional.get();
         User customer = customerOptional.get();
 
-        if (!shop.isActive() || !customer.isActive()) {
+        if (!shop.isActive()
+                || !customer.isActive()) {
+
             return Optional.empty();
         }
 
-        for (OrderItemRequest itemRequest : request.getItems()) {
+        if (customer.getRole() != Role.CUSTOMER) {
+            return Optional.empty();
+        }
 
-            Optional<ShopInventory> inventoryOptional =
-                    shopInventoryRepository.findByShopIdAndProductId(
-                            request.getShopId(),
-                            itemRequest.getProductId()
-                    );
+        return buildOrder(
+                customer,
+                shop,
+                request.getItems(),
+                request.getDeliveryMode()
+        );
+    }
 
-            if (inventoryOptional.isEmpty()) {
-                return Optional.empty();
-            }
+    @Transactional
+    public Order checkoutCart(
+            String email,
+            Long shopId,
+            com.localcart.entity.DeliveryMode deliveryMode) {
 
-            ShopInventory inventory = inventoryOptional.get();
+        User customer = getCustomer(email);
 
-            if (!inventory.isAvailable()
-                    || inventory.getStockQuantity()
-                    < itemRequest.getQuantity()) {
+        Shop shop = shopRepository.findById(shopId)
+                .orElseThrow(() ->
+                        new ResourceNotFoundException(
+                                "Shop not found"
+                        ));
 
-                return Optional.empty();
-            }
+        if (!shop.isActive()) {
+            throw new BadRequestException(
+                    "Shop is not active"
+            );
+        }
+
+        Cart cart = cartRepository
+                .findByCustomerIdAndShopId(
+                        customer.getId(),
+                        shopId
+                )
+                .orElseThrow(() ->
+                        new BadRequestException(
+                                "Cart is empty"
+                        ));
+
+        if (cart.getItems().isEmpty()) {
+            throw new BadRequestException(
+                    "Cart is empty"
+            );
+        }
+
+        List<OrderItemRequest> items =
+                cart.getItems()
+                        .stream()
+                        .map(item -> {
+
+                            OrderItemRequest request =
+                                    new OrderItemRequest();
+
+                            request.setProductId(
+                                    item.getProduct().getId()
+                            );
+
+                            request.setQuantity(
+                                    item.getQuantity()
+                            );
+
+                            return request;
+                        })
+                        .toList();
+
+        Order order = buildOrder(
+                customer,
+                shop,
+                items,
+                deliveryMode
+        ).orElseThrow(() ->
+                new BadRequestException(
+                        "Unable to create order"
+                ));
+
+        cart.getItems().clear();
+
+        cartRepository.save(cart);
+
+        return order;
+    }
+
+    private Optional<Order> buildOrder(
+            User customer,
+            Shop shop,
+            List<OrderItemRequest> items,
+            com.localcart.entity.DeliveryMode deliveryMode) {
+
+        if (items == null || items.isEmpty()) {
+            return Optional.empty();
         }
 
         Order order = new Order();
@@ -93,29 +186,49 @@ public class OrderService {
         order.setShop(shop);
         order.setCustomer(customer);
         order.setStatus(OrderStatus.PLACED);
-        order.setDeliveryMode(request.getDeliveryMode());
+        order.setDeliveryMode(deliveryMode);
 
         order = orderRepository.save(order);
 
         double totalAmount = 0;
 
-        for (OrderItemRequest itemRequest : request.getItems()) {
+        for (OrderItemRequest itemRequest : items) {
 
             ShopInventory inventory =
                     shopInventoryRepository
-                            .findByShopIdAndProductId(
-                                    request.getShopId(),
+                            .findByShopIdAndProductIdForUpdate(
+                                    shop.getId(),
                                     itemRequest.getProductId()
                             )
-                            .get();
+                            .orElse(null);
+
+            if (inventory == null) {
+                throw new BadRequestException(
+                        "Product is not available in this shop"
+                );
+            }
+
+            if (!inventory.isAvailable()
+                    || inventory.getStockQuantity()
+                    < itemRequest.getQuantity()) {
+
+                throw new BadRequestException(
+                        "Insufficient stock for "
+                                + inventory.getProduct().getName()
+                );
+            }
 
             double price = inventory.getPrice();
 
             OrderItem orderItem = new OrderItem();
 
             orderItem.setOrder(order);
-            orderItem.setProduct(inventory.getProduct());
-            orderItem.setQuantity(itemRequest.getQuantity());
+            orderItem.setProduct(
+                    inventory.getProduct()
+            );
+            orderItem.setQuantity(
+                    itemRequest.getQuantity()
+            );
             orderItem.setPrice(price);
 
             order.getItems().add(orderItem);
@@ -143,6 +256,36 @@ public class OrderService {
         );
     }
 
+    private User getCustomer(String email) {
+
+        if (email == null) {
+            throw new BadRequestException(
+                    "User is not authenticated"
+            );
+        }
+
+        User customer =
+                userRepository.findByEmail(email)
+                        .orElseThrow(() ->
+                                new ResourceNotFoundException(
+                                        "User not found"
+                                ));
+
+        if (customer.getRole() != Role.CUSTOMER) {
+            throw new BadRequestException(
+                    "Only a customer can place an order"
+            );
+        }
+
+        if (!customer.isActive()) {
+            throw new BadRequestException(
+                    "Customer account is inactive"
+            );
+        }
+
+        return customer;
+    }
+
     public Optional<Order> getOrderById(Long id) {
         return orderRepository.findById(id);
     }
@@ -151,7 +294,8 @@ public class OrderService {
         return orderRepository.findAll();
     }
 
-    public Optional<List<Order>> getOrdersByShop(Long shopId) {
+    public Optional<List<Order>> getOrdersByShop(
+            Long shopId) {
 
         if (!shopRepository.existsById(shopId)) {
             return Optional.empty();
@@ -221,11 +365,15 @@ public class OrderService {
         }
 
         if (currentStatus == OrderStatus.READY) {
-            return newStatus == OrderStatus.OUT_FOR_DELIVERY;
+            return newStatus ==
+                    OrderStatus.OUT_FOR_DELIVERY;
         }
 
-        if (currentStatus == OrderStatus.OUT_FOR_DELIVERY) {
-            return newStatus == OrderStatus.DELIVERED;
+        if (currentStatus ==
+                OrderStatus.OUT_FOR_DELIVERY) {
+
+            return newStatus ==
+                    OrderStatus.DELIVERED;
         }
 
         return false;
@@ -243,19 +391,23 @@ public class OrderService {
 
         Order order = existingOrder.get();
 
-        if (order.getStatus() == OrderStatus.DELIVERED
-                || order.getStatus() == OrderStatus.CANCELLED) {
+        if (order.getStatus() ==
+                OrderStatus.DELIVERED
+                || order.getStatus() ==
+                OrderStatus.CANCELLED) {
 
             return Optional.empty();
         }
 
-        for (OrderItem item : order.getItems()) {
+        for (OrderItem item :
+                order.getItems()) {
 
             Optional<ShopInventory> inventoryOptional =
-                    shopInventoryRepository.findByShopIdAndProductId(
-                            order.getShop().getId(),
-                            item.getProduct().getId()
-                    );
+                    shopInventoryRepository
+                            .findByShopIdAndProductId(
+                                    order.getShop().getId(),
+                                    item.getProduct().getId()
+                            );
 
             if (inventoryOptional.isPresent()) {
 

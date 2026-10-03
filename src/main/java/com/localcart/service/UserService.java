@@ -1,12 +1,14 @@
 package com.localcart.service;
 
+import com.localcart.dto.UserResponse;
 import com.localcart.entity.Role;
 import com.localcart.entity.User;
+import com.localcart.exception.BadRequestException;
+import com.localcart.exception.ResourceNotFoundException;
 import com.localcart.repository.UserRepository;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
-import java.util.Optional;
 
 @Service
 public class UserService {
@@ -17,10 +19,10 @@ public class UserService {
         this.userRepository = userRepository;
     }
 
-    public User createUser(User user) {
+    public UserResponse createUser(User user) {
 
         if (userRepository.existsByEmail(user.getEmail())) {
-            return null;
+            throw new BadRequestException("Email is already registered");
         }
 
         if (user.getRole() == null) {
@@ -29,49 +31,59 @@ public class UserService {
 
         user.setActive(true);
 
-        return userRepository.save(user);
+        User savedUser = userRepository.save(user);
+
+        return toResponse(savedUser);
     }
 
-    public List<User> getAllUsers() {
-        return userRepository.findAll();
+    public List<UserResponse> getAllUsers() {
+        return userRepository.findAll()
+                .stream()
+                .map(this::toResponse)
+                .toList();
     }
 
-    public Optional<User> getUserById(Long id) {
-        return userRepository.findById(id);
+    public UserResponse getUserById(Long id) {
+
+        User user = userRepository.findById(id)
+                .orElseThrow(() ->
+                        new ResourceNotFoundException("User not found with id " + id));
+
+        return toResponse(user);
     }
 
-    public Optional<User> getUserByEmail(String email) {
-        return userRepository.findByEmail(email);
-    }
+    public UserResponse updateUser(Long id, User updatedUser) {
 
-    public Optional<User> updateUser(Long id, User updatedUser) {
-
-        Optional<User> existingUser = userRepository.findById(id);
-
-        if (existingUser.isEmpty()) {
-            return Optional.empty();
-        }
-
-        User user = existingUser.get();
+        User user = userRepository.findById(id)
+                .orElseThrow(() ->
+                        new ResourceNotFoundException("User not found with id " + id));
 
         user.setName(updatedUser.getName());
         user.setEmail(updatedUser.getEmail());
         user.setRole(updatedUser.getRole());
 
-        return Optional.of(userRepository.save(user));
+        return toResponse(userRepository.save(user));
     }
 
-    public Optional<User> deactivateUser(Long id) {
+    public UserResponse deactivateUser(Long id) {
 
-        Optional<User> existingUser = userRepository.findById(id);
+        User user = userRepository.findById(id)
+                .orElseThrow(() ->
+                        new ResourceNotFoundException("User not found with id " + id));
 
-        if (existingUser.isEmpty()) {
-            return Optional.empty();
-        }
-
-        User user = existingUser.get();
         user.setActive(false);
 
-        return Optional.of(userRepository.save(user));
+        return toResponse(userRepository.save(user));
+    }
+
+    private UserResponse toResponse(User user) {
+
+        return new UserResponse(
+                user.getId(),
+                user.getName(),
+                user.getEmail(),
+                user.getRole(),
+                user.isActive()
+        );
     }
 }

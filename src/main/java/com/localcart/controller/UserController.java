@@ -1,12 +1,13 @@
 package com.localcart.controller;
 
+import com.localcart.dto.UserResponse;
 import com.localcart.entity.User;
 import com.localcart.service.UserService;
+import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
-import java.util.Optional;
 
 @RestController
 @RequestMapping("/api/users")
@@ -19,69 +20,40 @@ public class UserController {
     }
 
     @PostMapping
-    public ResponseEntity<User> createUser(@RequestBody User user) {
+    public ResponseEntity<UserResponse> createUser(
+            @Valid @RequestBody User user) {
 
-        User createdUser = userService.createUser(user);
-
-        if (createdUser == null) {
-            return ResponseEntity.badRequest().build();
-        }
-
-        return ResponseEntity.ok(createdUser);
+        return ResponseEntity.ok(userService.createUser(user));
     }
 
     @GetMapping
-    public ResponseEntity<List<User>> getAllUsers() {
+    public ResponseEntity<List<UserResponse>> getAllUsers() {
         return ResponseEntity.ok(userService.getAllUsers());
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<User> getUserById(@PathVariable Long id) {
+    public ResponseEntity<UserResponse> getUserById(
+            @PathVariable Long id) {
 
-        Optional<User> user = userService.getUserById(id);
-
-        if (user.isPresent()) {
-            return ResponseEntity.ok(user.get());
-        }
-
-        return ResponseEntity.notFound().build();
-    }
-
-    @GetMapping("/email/{email}")
-    public ResponseEntity<User> getUserByEmail(@PathVariable String email) {
-
-        Optional<User> user = userService.getUserByEmail(email);
-
-        if (user.isPresent()) {
-            return ResponseEntity.ok(user.get());
-        }
-
-        return ResponseEntity.notFound().build();
+        return ResponseEntity.ok(userService.getUserById(id));
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<User> updateUser(
+    public ResponseEntity<UserResponse> updateUser(
             @PathVariable Long id,
             @RequestBody User updatedUser) {
 
-        Optional<User> user = userService.updateUser(id, updatedUser);
-
-        if (user.isPresent()) {
-            return ResponseEntity.ok(user.get());
-        }
-
-        return ResponseEntity.notFound().build();
+        return ResponseEntity.ok(
+                userService.updateUser(id, updatedUser)
+        );
     }
 
     @PutMapping("/{id}/deactivate")
-    public ResponseEntity<User> deactivateUser(@PathVariable Long id) {
+    public ResponseEntity<UserResponse> deactivateUser(
+            @PathVariable Long id) {
 
-        Optional<User> user = userService.deactivateUser(id);
-
-        if (user.isPresent()) {
-            return ResponseEntity.ok(user.get());
-        }
-
-        return ResponseEntity.notFound().build();
+        return ResponseEntity.ok(
+                userService.deactivateUser(id)
+        );
     }
 }

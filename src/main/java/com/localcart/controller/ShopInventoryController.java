@@ -1,72 +1,82 @@
 package com.localcart.controller;
 
-import com.localcart.entity.ShopInventory;
+import com.localcart.dto.AddInventoryRequest;
+import com.localcart.dto.InventoryResponse;
+import com.localcart.dto.UpdateInventoryRequest;
+import com.localcart.security.SecurityUtils;
 import com.localcart.service.ShopInventoryService;
+import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
-import java.util.Optional;
 
 @RestController
-@RequestMapping("/api/inventory")
+@RequestMapping("/api/shopkeeper/shops")
 public class ShopInventoryController {
 
-    private final ShopInventoryService shopInventoryService;
+    private final ShopInventoryService inventoryService;
 
     public ShopInventoryController(
-            ShopInventoryService shopInventoryService) {
-
-        this.shopInventoryService = shopInventoryService;
+            ShopInventoryService inventoryService) {
+        this.inventoryService = inventoryService;
     }
 
-    @PostMapping
-    public ResponseEntity<ShopInventory> addProductToShop(
-            @RequestParam Long shopId,
-            @RequestParam Long productId,
-            @RequestParam double price,
-            @RequestParam int stockQuantity) {
+    @PostMapping("/{shopId}/inventory")
+    public ResponseEntity<InventoryResponse> addInventory(
+            @PathVariable Long shopId,
+            @Valid @RequestBody AddInventoryRequest request) {
 
-        Optional<ShopInventory> inventory =
-                shopInventoryService.addProductToShop(
-                        shopId,
-                        productId,
-                        price,
-                        stockQuantity
-                );
+        String email = SecurityUtils.getCurrentUserEmail();
 
-        if (inventory.isPresent()) {
-            return ResponseEntity.ok(inventory.get());
+        if (email == null) {
+            return ResponseEntity.status(401).build();
         }
 
-        return ResponseEntity.notFound().build();
-    }
-
-    @GetMapping
-    public ResponseEntity<List<ShopInventory>> getAllInventory() {
-
         return ResponseEntity.ok(
-                shopInventoryService.getAllInventory()
+                inventoryService.addInventory(
+                        email,
+                        shopId,
+                        request
+                )
         );
     }
 
-    @PutMapping("/{id}")
-    public ResponseEntity<ShopInventory> updateInventory(
-            @PathVariable Long id,
-            @RequestParam double price,
-            @RequestParam int stockQuantity) {
+    @GetMapping("/{shopId}/inventory")
+    public ResponseEntity<List<InventoryResponse>> getMyInventory(
+            @PathVariable Long shopId) {
 
-        Optional<ShopInventory> inventory =
-                shopInventoryService.updateInventory(
-                        id,
-                        price,
-                        stockQuantity
-                );
+        String email = SecurityUtils.getCurrentUserEmail();
 
-        if (inventory.isPresent()) {
-            return ResponseEntity.ok(inventory.get());
+        if (email == null) {
+            return ResponseEntity.status(401).build();
         }
 
-        return ResponseEntity.notFound().build();
+        return ResponseEntity.ok(
+                inventoryService.getMyInventory(
+                        email,
+                        shopId
+                )
+        );
+    }
+
+    @PutMapping("/inventory/{inventoryId}")
+    public ResponseEntity<InventoryResponse> updateInventory(
+            @PathVariable Long inventoryId,
+            @Valid @RequestBody UpdateInventoryRequest request) {
+
+        String email = SecurityUtils.getCurrentUserEmail();
+
+        if (email == null) {
+            return ResponseEntity.status(401).build();
+        }
+
+        return ResponseEntity.ok(
+                inventoryService.updateInventory(
+                        email,
+                        inventoryId,
+                        request
+                )
+        );
     }
 }

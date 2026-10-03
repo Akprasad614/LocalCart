@@ -13,9 +13,6 @@ public class CreateOrderRequest {
     private Long shopId;
 
     @NotNull
-    private Long customerId;
-
-    @NotNull
     private DeliveryMode deliveryMode;
 
     @NotEmpty
@@ -31,14 +28,6 @@ public class CreateOrderRequest {
 
     public void setShopId(Long shopId) {
         this.shopId = shopId;
-    }
-
-    public Long getCustomerId() {
-        return customerId;
-    }
-
-    public void setCustomerId(Long customerId) {
-        this.customerId = customerId;
     }
 
     public DeliveryMode getDeliveryMode() {

@@ -1,12 +1,15 @@
 package com.localcart.controller;
 
-import com.localcart.entity.Shop;
+import com.localcart.dto.CreateShopRequest;
+import com.localcart.dto.ShopResponse;
+import com.localcart.dto.UpdateShopRequest;
+import com.localcart.security.SecurityUtils;
 import com.localcart.service.ShopService;
+import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
-import java.util.Optional;
 
 @RestController
 @RequestMapping("/api/shops")
@@ -19,77 +22,69 @@ public class ShopController {
     }
 
     @PostMapping
-    public ResponseEntity<Shop> createShop(
-            @RequestBody Shop shop,
-            @RequestParam Long ownerId) {
+    public ResponseEntity<ShopResponse> createShop(
+            @Valid @RequestBody CreateShopRequest request) {
 
-        Optional<Shop> createdShop =
-                shopService.createShop(shop, ownerId);
+        String email = SecurityUtils.getCurrentUserEmail();
 
-        if (createdShop.isPresent()) {
-            return ResponseEntity.ok(createdShop.get());
-        }
-
-        return ResponseEntity.badRequest().build();
+        return ResponseEntity.ok(
+                shopService.createShop(
+                        email,
+                        request
+                )
+        );
     }
 
     @GetMapping
-    public ResponseEntity<List<Shop>> getAllShops() {
+    public ResponseEntity<List<ShopResponse>> getAllShops() {
         return ResponseEntity.ok(shopService.getAllShops());
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<Shop> getShopById(@PathVariable Long id) {
+    public ResponseEntity<ShopResponse> getShopById(
+            @PathVariable Long id) {
 
-        Optional<Shop> shop = shopService.getShopById(id);
-
-        if (shop.isPresent()) {
-            return ResponseEntity.ok(shop.get());
-        }
-
-        return ResponseEntity.notFound().build();
+        return ResponseEntity.ok(
+                shopService.getShopById(id)
+        );
     }
 
     @GetMapping("/owner/{ownerId}")
-    public ResponseEntity<List<Shop>> getShopsByOwner(
+    public ResponseEntity<List<ShopResponse>> getShopsByOwner(
             @PathVariable Long ownerId) {
 
-        Optional<List<Shop>> shops =
-                shopService.getShopsByOwner(ownerId);
-
-        if (shops.isPresent()) {
-            return ResponseEntity.ok(shops.get());
-        }
-
-        return ResponseEntity.notFound().build();
+        return ResponseEntity.ok(
+                shopService.getShopsByOwner(ownerId)
+        );
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<Shop> updateShop(
+    public ResponseEntity<ShopResponse> updateShop(
             @PathVariable Long id,
-            @RequestBody Shop updatedShop) {
+            @Valid @RequestBody UpdateShopRequest request) {
 
-        Optional<Shop> shop =
-                shopService.updateShop(id, updatedShop);
+        String email = SecurityUtils.getCurrentUserEmail();
 
-        if (shop.isPresent()) {
-            return ResponseEntity.ok(shop.get());
-        }
-
-        return ResponseEntity.notFound().build();
+        return ResponseEntity.ok(
+                shopService.updateShop(
+                        id,
+                        email,
+                        request
+                )
+        );
     }
 
     @PutMapping("/{id}/deactivate")
-    public ResponseEntity<Shop> deactivateShop(
+    public ResponseEntity<ShopResponse> deactivateShop(
             @PathVariable Long id) {
 
-        Optional<Shop> shop =
-                shopService.deactivateShop(id);
+        String email = SecurityUtils.getCurrentUserEmail();
 
-        if (shop.isPresent()) {
-            return ResponseEntity.ok(shop.get());
-        }
-
-        return ResponseEntity.notFound().build();
+        return ResponseEntity.ok(
+                shopService.deactivateShop(
+                        id,
+                        email
+                )
+        );
     }
 }
