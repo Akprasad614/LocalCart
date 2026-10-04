@@ -3,7 +3,6 @@ package com.localcart.service;
 import com.localcart.dto.CreateOrderRequest;
 import com.localcart.dto.OrderItemRequest;
 import com.localcart.entity.Cart;
-import com.localcart.entity.CartItem;
 import com.localcart.entity.Order;
 import com.localcart.entity.OrderItem;
 import com.localcart.entity.OrderStatus;
@@ -318,62 +317,57 @@ public class OrderService {
         );
     }
 
+    @Transactional
     public Optional<Order> updateOrderStatus(
-            Long id,
+            Long orderId,
             OrderStatus newStatus) {
 
-        Optional<Order> existingOrder =
-                orderRepository.findById(id);
+        Optional<Order> orderOptional =
+                orderRepository.findById(orderId);
 
-        if (existingOrder.isEmpty()) {
+        if (orderOptional.isEmpty()) {
             return Optional.empty();
         }
 
-        Order order = existingOrder.get();
+        Order order = orderOptional.get();
 
-        if (!isValidStatusChange(
-                order.getStatus(),
-                newStatus)) {
+        OrderStatus currentStatus = order.getStatus();
 
+        if (!isValidStatusChange(currentStatus, newStatus)) {
             return Optional.empty();
         }
 
         order.setStatus(newStatus);
 
-        return Optional.of(
-                orderRepository.save(order)
-        );
+        return Optional.of(orderRepository.save(order));
     }
 
     private boolean isValidStatusChange(
             OrderStatus currentStatus,
             OrderStatus newStatus) {
 
+        if (currentStatus == null || newStatus == null) {
+            return false;
+        }
+
         if (currentStatus == OrderStatus.PLACED) {
-            return newStatus == OrderStatus.ACCEPTED
-                    || newStatus == OrderStatus.CANCELLED;
+            return newStatus == OrderStatus.ACCEPTED;
         }
 
         if (currentStatus == OrderStatus.ACCEPTED) {
-            return newStatus == OrderStatus.PREPARING
-                    || newStatus == OrderStatus.CANCELLED;
+            return newStatus == OrderStatus.PREPARING;
         }
 
         if (currentStatus == OrderStatus.PREPARING) {
-            return newStatus == OrderStatus.READY
-                    || newStatus == OrderStatus.CANCELLED;
+            return newStatus == OrderStatus.READY;
         }
 
         if (currentStatus == OrderStatus.READY) {
-            return newStatus ==
-                    OrderStatus.OUT_FOR_DELIVERY;
+            return newStatus == OrderStatus.OUT_FOR_DELIVERY;
         }
 
-        if (currentStatus ==
-                OrderStatus.OUT_FOR_DELIVERY) {
-
-            return newStatus ==
-                    OrderStatus.DELIVERED;
+        if (currentStatus == OrderStatus.OUT_FOR_DELIVERY) {
+            return newStatus == OrderStatus.DELIVERED;
         }
 
         return false;
